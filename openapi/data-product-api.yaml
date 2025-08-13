@@ -1,0 +1,448 @@
+openapi: 3.0.3
+info:
+  title: Data Product Management API
+  description: API for managing data products in an enterprise environment
+  version: 1.0.0
+  contact:
+    name: Data Product Team
+    email: dataproduct@company.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.dataproduct.company.com
+    description: Production server
+
+paths:
+  /api/v1/data-products:
+    get:
+      summary: Get all data products
+      description: Retrieve a paginated list of all data products
+      operationId: getAllDataProducts
+      tags:
+        - Data Products
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-based)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Page size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: portfolio
+          in: query
+          description: Filter by portfolio
+          schema:
+            type: string
+        - name: sensitivityCategory
+          in: query
+          description: Filter by sensitivity category
+          schema:
+            $ref: '#/components/schemas/SensitivityCategory'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataProductPageResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Create a new data product
+      description: Create a new data product with the provided information
+      operationId: createDataProduct
+      tags:
+        - Data Products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDataProductRequest'
+      responses:
+        '201':
+          description: Data product created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataProductResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Data product with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/data-products/{id}:
+    get:
+      summary: Get data product by ID
+      description: Retrieve a specific data product by its ID
+      operationId: getDataProductById
+      tags:
+        - Data Products
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Data product ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataProductResponse'
+        '404':
+          description: Data product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update data product
+      description: Update an existing data product
+      operationId: updateDataProduct
+      tags:
+        - Data Products
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Data product ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDataProductRequest'
+      responses:
+        '200':
+          description: Data product updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataProductResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Data product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete data product
+      description: Delete a data product by its ID
+      operationId: deleteDataProduct
+      tags:
+        - Data Products
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Data product ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Data product deleted successfully
+        '404':
+          description: Data product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/health:
+    get:
+      summary: Health check
+      description: Check if the API is healthy
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  schemas:
+    DataProductResponse:
+      type: object
+      required:
+        - id
+        - name
+        - portfolio
+        - source
+        - sensitivityCategory
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the data product
+        name:
+          type: string
+          description: Name of the data product
+          example: "Customer Analytics Dataset"
+        description:
+          type: string
+          description: Detailed description of the data product
+          example: "Comprehensive customer behavior analytics data"
+        portfolio:
+          type: string
+          description: Business portfolio this data product belongs to
+          example: "Marketing Analytics"
+        source:
+          type: string
+          description: Source system or origin of the data
+          example: "CRM System"
+        sensitivityCategory:
+          $ref: '#/components/schemas/SensitivityCategory'
+        dataFormat:
+          type: string
+          description: Format of the data (JSON, CSV, Parquet, etc.)
+          example: "JSON"
+        owner:
+          type: string
+          description: Data product owner or responsible person
+          example: "john.doe@company.com"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags for categorization
+          example: ["analytics", "customer", "marketing"]
+        isActive:
+          type: boolean
+          description: Whether the data product is currently active
+          default: true
+        retentionPeriodDays:
+          type: integer
+          description: Data retention period in days
+          minimum: 1
+          example: 365
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    CreateDataProductRequest:
+      type: object
+      required:
+        - name
+        - portfolio
+        - source
+        - sensitivityCategory
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Name of the data product
+        description:
+          type: string
+          maxLength: 1000
+          description: Detailed description of the data product
+        portfolio:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Business portfolio this data product belongs to
+        source:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Source system or origin of the data
+        sensitivityCategory:
+          $ref: '#/components/schemas/SensitivityCategory'
+        dataFormat:
+          type: string
+          maxLength: 50
+          description: Format of the data
+        owner:
+          type: string
+          format: email
+          description: Data product owner email
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+          description: Tags for categorization
+        retentionPeriodDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: Data retention period in days
+
+    UpdateDataProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Name of the data product
+        description:
+          type: string
+          maxLength: 1000
+          description: Detailed description of the data product
+        portfolio:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Business portfolio this data product belongs to
+        source:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Source system or origin of the data
+        sensitivityCategory:
+          $ref: '#/components/schemas/SensitivityCategory'
+        dataFormat:
+          type: string
+          maxLength: 50
+          description: Format of the data
+        owner:
+          type: string
+          format: email
+          description: Data product owner email
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+          description: Tags for categorization
+        isActive:
+          type: boolean
+          description: Whether the data product is currently active
+        retentionPeriodDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: Data retention period in days
+
+    DataProductPageResponse:
+      type: object
+      required:
+        - content
+        - page
+        - size
+        - totalElements
+        - totalPages
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataProductResponse'
+        page:
+          type: integer
+          description: Current page number (0-based)
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          description: Total number of elements
+        totalPages:
+          type: integer
+          description: Total number of pages
+        first:
+          type: boolean
+          description: Whether this is the first page
+        last:
+          type: boolean
+          description: Whether this is the last page
+
+    SensitivityCategory:
+      type: string
+      enum:
+        - PUBLIC
+        - INTERNAL
+        - CONFIDENTIAL
+        - RESTRICTED
+      description: Data sensitivity classification
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+        - timestamp
+      properties:
+        message:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Detailed error information
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+        path:
+          type: string
+          description: API path where error occurred
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN]
+          description: Service health status
+        timestamp:
+          type: string
+          format: date-time
+          description: Health check timestamp
+        version:
+          type: string
+          description: Application version
+        database:
+          type: string
+          enum: [UP, DOWN]
+          description: Database connection status

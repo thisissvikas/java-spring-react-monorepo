@@ -1,0 +1,5 @@
+rootProject.name = 'data-product-management-system'
+
+include 'commons'
+include 'data-product-api'
+include 'data-product-e2e'

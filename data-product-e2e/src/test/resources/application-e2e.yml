@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: data-product-e2e
+
+api:
+  base:
+    url: ${API_BASE_URL:http://localhost:8080}
+
+logging:
+  level:
+    com.dataproduct.e2e: DEBUG
+    org.springframework.web: INFO

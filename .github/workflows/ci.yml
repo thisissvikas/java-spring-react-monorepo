@@ -1,0 +1,222 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: dataproduct_user
+          POSTGRES_DB: dataproduct_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build projects
+      run: ./gradlew build --no-daemon
+
+    - name: Run unit tests
+      run: ./gradlew test --no-daemon
+
+    - name: Run integration tests
+      run: ./gradlew :data-product-api:test --no-daemon
+      env:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/dataproduct_db
+        SPRING_DATASOURCE_USERNAME: dataproduct_user
+        SPRING_DATASOURCE_PASSWORD: password
+
+    - name: Generate test report
+      uses: dorny/test-reporter@v1
+      if: success() || failure()
+      with:
+        name: Backend Test Results
+        path: '**/build/test-results/test/*.xml'
+        reporter: java-junit
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: data-product-ui/package-lock.json
+
+    - name: Install dependencies
+      working-directory: data-product-ui
+      run: npm ci
+
+    - name: Run linter
+      working-directory: data-product-ui
+      run: npm run lint --if-present
+
+    - name: Run unit tests
+      working-directory: data-product-ui
+      run: npm run test:ci
+
+    - name: Build frontend
+      working-directory: data-product-ui
+      run: npm run build
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: data-product-ui/coverage/lcov.info
+        flags: frontend
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: dataproduct_user
+          POSTGRES_DB: dataproduct_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: data-product-ui/package-lock.json
+
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build backend
+      run: ./gradlew :data-product-api:build --no-daemon
+
+    - name: Start backend API
+      run: |
+        ./gradlew :data-product-api:bootRun --no-daemon &
+        echo $! > backend.pid
+      env:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/dataproduct_db
+        SPRING_DATASOURCE_USERNAME: dataproduct_user
+        SPRING_DATASOURCE_PASSWORD: password
+
+    - name: Wait for backend to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:8080/api/v1/health; do sleep 2; done'
+
+    - name: Install frontend dependencies
+      working-directory: data-product-ui
+      run: npm ci
+
+    - name: Build frontend
+      working-directory: data-product-ui
+      run: npm run build
+
+    - name: Start frontend
+      working-directory: data-product-ui
+      run: |
+        npm start &
+        echo $! > frontend.pid
+
+    - name: Wait for frontend to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+
+    - name: Run end-to-end tests
+      run: ./gradlew :data-product-e2e:test --no-daemon -Papi.base.url=http://localhost:8080
+
+    - name: Stop services
+      if: always()
+      run: |
+        if [ -f backend.pid ]; then kill $(cat backend.pid) || true; fi
+        if [ -f data-product-ui/frontend.pid ]; then kill $(cat data-product-ui/frontend.pid) || true; fi
+
+    - name: Generate E2E test report
+      uses: dorny/test-reporter@v1
+      if: success() || failure()
+      with:
+        name: E2E Test Results
+        path: 'data-product-e2e/build/test-results/test/*.xml'
+        reporter: java-junit
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'

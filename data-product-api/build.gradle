@@ -1,0 +1,49 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+    id 'org.openapi.generator' version '7.2.0'
+}
+
+dependencies {
+    implementation project(':commons')
+    
+    runtimeOnly 'org.postgresql:postgresql'
+    
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'com.h2database:h2'
+}
+
+openApiGenerate {
+    generatorName = 'spring'
+    inputSpec = "$rootDir/openapi/data-product-api.yaml".toString()
+    outputDir = "$buildDir/generated".toString()
+    apiPackage = 'com.dataproduct.api.generated'
+    modelPackage = 'com.dataproduct.api.generated.model'
+    configOptions = [
+        interfaceOnly: 'true',
+        useTags: 'true',
+        dateLibrary: 'java8',
+        java8: 'true',
+        hideGenerationTimestamp: 'true',
+        useSpringBoot3: 'true'
+    ]
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs += "$buildDir/generated/src/main/java"
+        }
+    }
+}
+
+compileJava.dependsOn tasks.openApiGenerate
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}

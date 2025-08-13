@@ -1,0 +1,90 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.1' apply false
+    id 'io.spring.dependency-management' version '1.1.4' apply false
+    id 'org.openapi.generator' version '7.2.0' apply false
+}
+
+allprojects {
+    group = 'com.dataproduct'
+    version = '1.0.0'
+    
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+    
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+    
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+    
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter'
+        annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testImplementation 'org.testcontainers:junit-jupiter'
+    }
+    
+    dependencyManagement {
+        imports {
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.2.1'
+            mavenBom 'org.testcontainers:testcontainers-bom:1.19.3'
+        }
+    }
+    
+    test {
+        useJUnitPlatform()
+    }
+}
+
+// Generate OpenAPI code for all projects
+task generateApiCode {
+    dependsOn ':data-product-api:openApiGenerate'
+    dependsOn ':data-product-e2e:openApiGenerate'
+}
+
+// Build all projects
+task buildAll {
+    dependsOn ':commons:build'
+    dependsOn ':data-product-api:build'
+    dependsOn ':data-product-e2e:build'
+    dependsOn 'buildUI'
+}
+
+// Build UI project
+task buildUI(type: Exec) {
+    workingDir 'data-product-ui'
+    
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        commandLine 'cmd', '/c', 'npm install && npm run build'
+    } else {
+        commandLine 'sh', '-c', 'npm install && npm run build'
+    }
+}
+
+// Clean all projects including UI
+task cleanAll {
+    dependsOn 'clean'
+    dependsOn 'cleanUI'
+}
+
+task cleanUI(type: Exec) {
+    workingDir 'data-product-ui'
+    
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        commandLine 'cmd', '/c', 'rm -rf node_modules build'
+    } else {
+        commandLine 'sh', '-c', 'rm -rf node_modules build'
+    }
+}
